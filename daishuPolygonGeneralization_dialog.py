@@ -78,7 +78,9 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     pic=min(width,height)/200
 
                     print(pic)
-                    self.generate_points(pic,currLayer,crs_auth_id)
+                    point_layer=self.generate_points(pic,currLayer,crs_auth_id)
+                    self.generate_delaunay_triangulation(point_layer,crs_auth_id)
+                    warningLabel.setText("生成完成")
                 else:
                     print("当前图层不是面图层！")
             else:
@@ -99,7 +101,6 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
             warningLabel.setText("不能是线图层")
         elif geometry_type == QgsWkbTypes.PolygonGeometry:
             print("这是一个面图层")
-            warningLabel.setText("面图层")
             return 1
         else:
             print("未知类型的矢量图层")
@@ -153,10 +154,30 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                 boundary_line = polygon.boundary()
                 points = list(boundary_line.vertices())
 
+                lastPoint=None
                 # 遍历边界上的每个点
                 for point in points:
                     # 将 QgsPoint 转换为 QgsPointXY
                     point_xy = QgsPointXY(point)
+
+                    if lastPoint is not None:
+                        distance = lastPoint.distance(point_xy)
+                        if distance>pic:
+                            num_points = int(distance // pic)  # 计算需要插入的点数
+                            for i in range(1, num_points + 1):
+                                # 插值点按比例计算
+                                interpolated_point = QgsPointXY(
+                                    lastPoint.x() + (point_xy.x() - lastPoint.x()) * i / (num_points + 1),
+                                    lastPoint.y() + (point_xy.y() - lastPoint.y()) * i / (num_points + 1)
+                                )
+                                # 创建一个 QgsFeature 并设置几何和属性
+                                point_feature = QgsFeature()
+                                point_feature.setGeometry(
+                                    QgsGeometry.fromPointXY(interpolated_point))  # 使用 QgsPointXY 创建几何
+                                point_feature.setAttributes([feature.id()])  # 设置 polygon_id 属性
+
+                                # 将插值点添加到图层
+                                point_provider.addFeature(point_feature)
 
                     # 创建一个 QgsFeature 并设置几何和属性
                     point_feature = QgsFeature()
@@ -165,11 +186,11 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
                     # 将点添加到图层
                     point_provider.addFeature(point_feature)
-
+                    lastPoint=point_xy
         # 将临时图层添加到地图中
         QgsProject.instance().addMapLayer(point_layer)
-        self.generate_delaunay_triangulation(point_layer,crs)
         print(f"生成的点已添加到图层：{point_layer.name()}")
+        return point_layer
 
     def generate_delaunay_triangulation(self, point_layer, crs):
         # 创建一个临时图层来保存 Delaunay 三角网
