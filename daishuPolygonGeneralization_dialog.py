@@ -58,6 +58,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         self.setupUi(self)
 
         self.pbGeneralize.clicked.connect(self.onPbGeneralizeClicked)
+        self.pbStep.clicked.connect(self.onpbStepClicked)
 
     def onPbGeneralizeClicked(self):
         currLayer=self.mlLayer.currentLayer()
@@ -79,13 +80,59 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
                     print(pic)
                     point_layer=self.generate_points(pic,currLayer,crs_auth_id)
-                    self.generate_delaunay_triangulation(point_layer,crs_auth_id)
+                    triangulation_layer=self.generate_delaunay_triangulation(point_layer,crs_auth_id)
+                    self.reduce_triangulation(triangulation_layer,0.8)
+                    warningLabel.setText("生成完成")
+                else:
+                    print("当前图层不是面图层！")
+            else:
+                print("图层无效！")
+    step=0
+    crs=None
+    layer=None
+    pic=None
+    def onpbStepClicked(self):
+        if self.step==0:
+            self.step0()
+            self.step=1
+        elif self.step==1:
+            self.step1()
+            self.step=2
+        elif self.step == 2:
+            self.step2()
+            self.step = 3
+        return
+
+    def step0(self):
+        currLayer=self.mlLayer.currentLayer()
+        crs = currLayer.crs()
+        crs_auth_id = crs.authid()  # 获取参考系的 EPSG 代码，例如 "EPSG:4326"
+
+        warningLabel=self.lblWarning
+        if self.check_layer_type(currLayer,warningLabel)==1:
+            if currLayer is not None and currLayer.isValid():
+                # 确保图层是矢量图层
+                if currLayer.geometryType() == QgsWkbTypes.PolygonGeometry:
+                    bounds=self.get_layer_bounds(currLayer)
+                    if bounds is None:
+                        return
+                    width=bounds.width()
+                    height=bounds.height()
+
+                    pic=min(width,height)/200
+                    self.pic=pic
+                    self.crs=crs_auth_id
+                    self.layer=self.generate_points(pic,currLayer,crs_auth_id)
                     warningLabel.setText("生成完成")
                 else:
                     print("当前图层不是面图层！")
             else:
                 print("图层无效！")
 
+    def step1(self):
+        self.layer = self.generate_delaunay_triangulation(self.layer, self.crs)
+    def step2(self):
+        self.reduce_triangulation(self.layer,0.8)
     def check_layer_type(self,layer,warningLabel):
 
         # 获取几何类型
@@ -198,14 +245,22 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         triangulation_provider = triangulation_layer.dataProvider()
 
         # 添加属性字段（可选）
-        triangulation_provider.addAttributes([QgsField("triangle_id", QVariant.Int)])
+        triangulation_provider.addAttributes([
+            QgsField("triangle_id", QVariant.Int),
+            QgsField("point_1", QVariant.Int),
+            QgsField("point_2", QVariant.Int),
+            QgsField("point_3", QVariant.Int)
+        ])
         triangulation_layer.updateFields()
 
         # 提取 point_layer 中的所有点
         points = []
+        point_id_map = {}
         for feature in point_layer.getFeatures():
             point = feature.geometry().centroid().asPoint()  # 获取点的中心
+            polygon_id = feature['polygon_id']  # 获取 polygon_id 属性
             points.append(QgsPointXY(point.x(), point.y()))  # 获取点的 x, y 坐标
+            point_id_map[len(points) - 1] = polygon_id  # 记录点的 ID 和 polygon_id
 
         # 创建 QgsGeometry 对象
         geometry = QgsGeometry.fromPolylineXY(points)
@@ -217,12 +272,20 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         triangle_id = 1
         for geom in triangulation.asGeometryCollection():
             if geom.type() == QgsWkbTypes.PolygonGeometry:
+                # 获取三角形的三个顶点
+                vertices = geom.asPolygon()[0]
+
+                # 根据点的顺序获取对应的 polygon_id
+                point_1_id = point_id_map[points.index(QgsPointXY(vertices[0].x(), vertices[0].y()))]
+                point_2_id = point_id_map[points.index(QgsPointXY(vertices[1].x(), vertices[1].y()))]
+                point_3_id = point_id_map[points.index(QgsPointXY(vertices[2].x(), vertices[2].y()))]
+
                 # 创建一个新的要素
                 feature = QgsFeature()
                 feature.setGeometry(geom)
 
                 # 设置属性字段
-                feature.setAttributes([triangle_id])
+                feature.setAttributes([triangle_id, point_1_id, point_2_id, point_3_id])
 
                 # 将要素添加到图层
                 triangulation_provider.addFeature(feature)
@@ -232,4 +295,71 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         # 刷新图层以显示更改
         triangulation_layer.updateExtents()
         QgsProject.instance().addMapLayer(triangulation_layer)
+        return triangulation_layer
 
+    def reduce_triangulation(self,triangulation_layer,magnification):
+        total_length = 0  # 总长度
+        count = 0  # 计数器，用于计算平均长度
+
+        for feature in triangulation_layer.getFeatures():
+            geom = feature.geometry()
+            if geom is None or not geom.isGeosValid():
+                continue
+
+            # 获取外环和内环
+            polygons = geom.constParts()
+
+            for polygon in polygons:
+                boundary_line = polygon.boundary()
+                boundary_length = boundary_line.length()  # 获取边界线的长度
+                total_length += boundary_length  # 累加到总长度
+                count += 1  # 增加计数器
+
+            # 计算平均长度
+            if count > 0:
+                average_length = total_length / count
+            else:
+                average_length = 0
+
+        # 创建一个新的临时图层
+        crs = triangulation_layer.crs()  # 获取原图层的坐标参考系统
+        temporary_layer = QgsVectorLayer('Polygon?crs={}'.format(crs.authid()), 'Reduced Triangles', 'memory')
+
+        # 获取数据提供者（用于添加和删除特征）
+        provider = temporary_layer.dataProvider()
+
+        # 存储边长大于平均长度三倍的三角形
+        to_keep_features = []
+
+        # 查找并保留边长小于等于平均长度三倍的三角形
+        for feature in triangulation_layer.getFeatures():
+            geom = feature.geometry()
+            if geom is None or not geom.isGeosValid():
+                continue
+
+            # 获取外环和内环
+            polygons = geom.constParts()
+
+            for polygon in polygons:
+                boundary_line = polygon.boundary()
+                boundary_length = boundary_line.length()  # 获取边界线的长度
+                if boundary_length <= magnification*average_length:  # 保留边长小于等于平均长度三倍的三角形
+
+                    to_keep_features.append(feature)  # 将该三角形加入保留列表
+                else:
+                    point_1 = feature['point_1']
+                    point_2 = feature['point_2']
+                    point_3 = feature['point_3']
+                    # 如果 point_1, point_2, point_3 相同，则跳过
+                    if point_1 == point_2 == point_3:
+                        to_keep_features.append(feature)  # 将该三角形加入保留列表
+
+        # 向临时图层添加特征
+        provider.addFeatures(to_keep_features)
+
+        # 更新图层
+        temporary_layer.updateExtents()
+
+        QgsProject.instance().addMapLayer(temporary_layer)
+
+        return

@@ -65,6 +65,19 @@
     <string>...</string>
    </property>
   </widget>
+  <widget class="QPushButton" name="pbStep">
+   <property name="geometry">
+    <rect>
+     <x>280</x>
+     <y>150</y>
+     <width>75</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>step&gt;&gt;</string>
+   </property>
+  </widget>
  </widget>
  <customwidgets>
   <customwidget>
