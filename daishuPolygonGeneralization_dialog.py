@@ -168,6 +168,47 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
         # 将临时图层添加到地图中
         QgsProject.instance().addMapLayer(point_layer)
+        self.generate_delaunay_triangulation(point_layer,crs)
         print(f"生成的点已添加到图层：{point_layer.name()}")
 
+    def generate_delaunay_triangulation(self, point_layer, crs):
+        # 创建一个临时图层来保存 Delaunay 三角网
+        triangulation_layer = QgsVectorLayer("Polygon?crs=" + crs, "Delaunay Triangulation", "memory")
+        triangulation_provider = triangulation_layer.dataProvider()
+
+        # 添加属性字段（可选）
+        triangulation_provider.addAttributes([QgsField("triangle_id", QVariant.Int)])
+        triangulation_layer.updateFields()
+
+        # 提取 point_layer 中的所有点
+        points = []
+        for feature in point_layer.getFeatures():
+            point = feature.geometry().centroid().asPoint()  # 获取点的中心
+            points.append(QgsPointXY(point.x(), point.y()))  # 获取点的 x, y 坐标
+
+        # 创建 QgsGeometry 对象
+        geometry = QgsGeometry.fromPolylineXY(points)
+
+        # 生成 Delaunay 三角剖分
+        triangulation = QgsGeometry.delaunayTriangulation(geometry)
+
+        # 遍历 GeometryCollection 中的每个三角形并将其添加到图层
+        triangle_id = 1
+        for geom in triangulation.asGeometryCollection():
+            if geom.type() == QgsWkbTypes.PolygonGeometry:
+                # 创建一个新的要素
+                feature = QgsFeature()
+                feature.setGeometry(geom)
+
+                # 设置属性字段
+                feature.setAttributes([triangle_id])
+
+                # 将要素添加到图层
+                triangulation_provider.addFeature(feature)
+
+                triangle_id += 1
+
+        # 刷新图层以显示更改
+        triangulation_layer.updateExtents()
+        QgsProject.instance().addMapLayer(triangulation_layer)
 
