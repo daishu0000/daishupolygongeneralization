@@ -85,6 +85,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     triangulation_layer=self.generate_delaunay_triangulation(point_layer,crs_auth_id)
                     reduce_layer=self.reduce_triangulation(triangulation_layer,0.8)
                     merged_layer=self.merge_triangulation(reduce_layer)
+                    full_layer=self.fulfillPolygon(merged_layer)
                     warningLabel.setText("生成完成")
                 else:
                     print("当前图层不是面图层！")
@@ -107,6 +108,9 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         elif self.step == 3:
             self.step3()
             self.step = 4
+        elif self.step == 4:
+            self.step4()
+            self.step = 5
         return
 
     def step0(self):
@@ -125,7 +129,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     width=bounds.width()
                     height=bounds.height()
 
-                    pic=min(width,height)/200
+                    pic=min(width,height)/100
                     self.pic=pic
                     self.crs=crs_auth_id
                     self.layer=self.generate_points(pic,currLayer,crs_auth_id)
@@ -150,6 +154,12 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         warningLabel.setText("正在合并...")
         self.layer=self.merge_triangulation(self.layer)
         warningLabel.setText("合并完成")
+    def step4(self):
+        warningLabel=self.lblWarning
+        warningLabel.setText("正在填充多边形...")
+        self.layer=self.fulfillPolygon(self.layer)
+        warningLabel.setText("填充多边形完成")
+
     def check_layer_type(self,layer,warningLabel):
 
         # 获取几何类型
@@ -451,105 +461,6 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         # 返回合并后的图层
         return  merged_layer
 
-        #     # 将属性值作为元组存储在列表中
-        #     found = False
-        #     hashcode = self.encode_record(point_1, point_2, point_3)
-        #
-        #     polygonMap.setdefault(hashcode, []).append(triangle_id)
-        #
-        # merged_layer = QgsVectorLayer('Polygon?crs=EPSG:4326', 'merged_layer', 'memory')
-        # provider = merged_layer.dataProvider()
-        #
-        # j=0
-        # for hashCode in polygonMap:
-        #     j+=1
-        #     print("多边形合并:正在合并第"+str(j)+"个")
-        #     merged_geometry = QgsGeometry.fromWkt('MULTIPOLYGON EMPTY')
-        #     for polygonId in polygonMap[hashCode]:
-        #         # 设置你要查找的属性字段名和属性值
-        #         field_name = 'triangle_id'
-        #         value_to_find = polygonId
-        #
-        #         # 创建查询请求（筛选器）
-        #         request = QgsFeatureRequest().setFilterExpression(f'"{field_name}" = \'{value_to_find}\'')
-        #
-        #         # 查找符合条件的要素
-        #         feature =next(reduce_layer.getFeatures(request))
-        #
-        #         if feature:
-        #             # 获取多边形的几何并合并到已有的几何中
-        #             geometry = feature.geometry()
-        #             if merged_geometry.isEmpty():
-        #                 merged_geometry = geometry
-        #             else:
-        #                 merged_geometry = merged_geometry.combine(geometry)
-        #     # 将合并后的几何添加到新图层
-        #     if not merged_geometry.isEmpty():
-        #         new_feature = QgsFeature()
-        #         new_feature.setGeometry(merged_geometry)
-        #         provider.addFeature(new_feature)
-        # # 更新图层
-        # merged_layer.updateExtents()
-        # QgsProject.instance().addMapLayer(merged_layer)
-        #
-        # print("多边形合并:已完成")
-        # # 返回合并后的图层
-        # return  merged_layer
-
-            # for category in categories:
-            #     if (point_1 in category or point_2 in category or point_3 in category):
-            #         found = True
-            #         break
-            # if not found:
-            #     categories.append({(point_1, point_2, point_3)})
-
-        # # 创建一个新的图层来存储合并后的多边形
-        # merged_layer = QgsVectorLayer('Polygon?crs=EPSG:4326', 'merged_layer', 'memory')
-        # provider = merged_layer.dataProvider()
-        #
-        # print("总共"+str(len(categories)))
-        # merge_map={}
-        # j=0
-        #
-        # # 合并同类多边形
-        # for category in categories:
-        #     j+=1
-        #     if j%100==0:
-        #         print("正在合并第"+str(i)+"个多边形")
-        #         print(category)
-        #     if merge_map!={}:
-        #         pass
-        #     else:
-        #         merge_map[]
-            # # 创建一个空的QgsGeometry来合并多边形
-            # merged_geometry = QgsGeometry()
-            #
-            # for feature in reduce_layer.getFeatures():
-            #     # 获取每个要素的几何体
-            #     point_1 = feature['point_1']
-            #     point_2 = feature['point_2']
-            #     point_3 = feature['point_3']
-            #     if (point_1, point_2, point_3) in category or \
-            #             (point_1, point_2, point_3) in category or \
-            #             (point_1, point_3, point_2) in category:
-            #         geom = feature.geometry()
-            #         if merged_geometry.isEmpty():
-            #             merged_geometry = geom
-            #         else:
-            #             merged_geometry = merged_geometry.combine(geom)
-            #
-            # # 创建一个新的要素并将合并后的几何体添加到新图层
-            # new_feature = QgsFeature()
-            # new_feature.setGeometry(merged_geometry)
-            #
-            # # 添加到新图层
-            # provider.addFeature(new_feature)
-
-        # # 更新图层
-        # merged_layer.updateExtents()
-        #
-        # QgsProject.instance().addMapLayer(merged_layer)
-
 
     def encode_record(self,a, b, c):
         record = f"{a}-{b}-{c}"
@@ -593,10 +504,62 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
             grouped[root].append(obj)
 
         return grouped
+
+    def fulfillPolygon(self,merged_layer):
+        crs = merged_layer.crs()  # 获取原图层的坐标参考系统
+        warningLabel=self.lblWarning
+        if self.check_layer_type(merged_layer,warningLabel)==1:
+            if merged_layer is not None and merged_layer.isValid():
+                # 确保图层是矢量图层
+                if merged_layer.geometryType() == QgsWkbTypes.PolygonGeometry:
+                    # 创建新的图层，用于存储去除内部环的多边形
+                    full_layer = QgsVectorLayer('Polygon?crs={}'.format(crs.authid()), 'Full Polygons', 'memory')
+                    new_provider = full_layer.dataProvider()
+                    new_provider.addAttributes([QgsField('id', QVariant.Int)])
+                    full_layer.updateFields()
+
+                    # 遍历当前图层的所有要素
+                    for feature in merged_layer.getFeatures():
+                        geom = feature.geometry()
+
+                        if geom.isMultipart():
+                            # 获取所有的多部分多边形（外环和内环）
+                            parts = geom.asMultiPolygon()
+                            for part in parts:
+                                outer_ring = part[0]  # 外环
+                                # 将外环创建成一个新的多边形
+                                new_geom = QgsGeometry.fromPolygonXY([outer_ring])
+
+                                # 创建新的特征并设置其几何信息
+                                new_feature = QgsFeature()
+                                new_feature.setGeometry(new_geom)
+                                new_feature.setAttributes([feature.id()])
+
+                                # 将新的特征添加到新图层
+                                new_provider.addFeature(new_feature)
+                        else:
+                            # 单个多边形的处理
+                            outer_ring = geom.asPolygon()[0]  # 获取外环
+                            new_geom = QgsGeometry.fromPolygonXY([outer_ring])
+
+                            # 创建新的特征并设置其几何信息
+                            new_feature = QgsFeature()
+                            new_feature.setGeometry(new_geom)
+                            new_feature.setAttributes([feature.id()])
+
+                            # 将新的特征添加到新图层
+                            new_provider.addFeature(new_feature)
+
+                    # 更新新图层的显示
+                    QgsProject.instance().addMapLayer(full_layer)
+                    return full_layer
+                else:
+                    print("当前图层不是面图层！")
+            else:
+                print("图层无效！")
+
+        return
     def onPbFillPolygonClicked(self):
         currLayer=self.mlLayer.currentLayer()
-        crs = currLayer.crs()
-        crs_auth_id = crs.authid()
-        warningLabel=self.lblWarning
-
+        self.fulfillPolygon(currLayer)
         return
