@@ -174,7 +174,6 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
             print("这是一个线图层")
             warningLabel.setText("不能是线图层")
         elif geometry_type == QgsWkbTypes.PolygonGeometry:
-            print("这是一个面图层")
             return 1
         else:
             print("未知类型的矢量图层")
@@ -508,6 +507,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
     def fulfillPolygon(self,merged_layer):
         crs = merged_layer.crs()  # 获取原图层的坐标参考系统
         warningLabel=self.lblWarning
+        print("正在填充")
         if self.check_layer_type(merged_layer,warningLabel)==1:
             if merged_layer is not None and merged_layer.isValid():
                 # 确保图层是矢量图层
@@ -552,6 +552,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
                     # 更新新图层的显示
                     QgsProject.instance().addMapLayer(full_layer)
+                    print("填充完成")
                     return full_layer
                 else:
                     print("当前图层不是面图层！")
