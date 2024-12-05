@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-
+import hashlib
 import os
 
 from qgis.PyQt import uic
@@ -36,7 +36,8 @@ from qgis.core import (
     QgsFeature,          # 创建要素
     QgsGeometry,         # 几何操作
     QgsLineString,       # 线几何类型
-    QgsPointXY
+    QgsPointXY,
+    QgsFeatureRequest
 
 )
 from qgis.PyQt.QtCore import QVariant  # 用于属性字段的数据类型
@@ -59,6 +60,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
         self.pbGeneralize.clicked.connect(self.onPbGeneralizeClicked)
         self.pbStep.clicked.connect(self.onpbStepClicked)
+        self.pbFillPolygon.clicked.connect(self.onPbFillPolygonClicked)
 
     def onPbGeneralizeClicked(self):
         currLayer=self.mlLayer.currentLayer()
@@ -81,7 +83,8 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     print(pic)
                     point_layer=self.generate_points(pic,currLayer,crs_auth_id)
                     triangulation_layer=self.generate_delaunay_triangulation(point_layer,crs_auth_id)
-                    self.reduce_triangulation(triangulation_layer,0.8)
+                    reduce_layer=self.reduce_triangulation(triangulation_layer,0.8)
+                    merged_layer=self.merge_triangulation(reduce_layer)
                     warningLabel.setText("生成完成")
                 else:
                     print("当前图层不是面图层！")
@@ -101,6 +104,9 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         elif self.step == 2:
             self.step2()
             self.step = 3
+        elif self.step == 3:
+            self.step3()
+            self.step = 4
         return
 
     def step0(self):
@@ -123,16 +129,27 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     self.pic=pic
                     self.crs=crs_auth_id
                     self.layer=self.generate_points(pic,currLayer,crs_auth_id)
-                    warningLabel.setText("生成完成")
+                    warningLabel.setText("点生成完成")
                 else:
                     print("当前图层不是面图层！")
             else:
                 print("图层无效！")
 
     def step1(self):
+        warningLabel=self.lblWarning
+        warningLabel.setText("正在生成delaunay三角网...")
         self.layer = self.generate_delaunay_triangulation(self.layer, self.crs)
+        warningLabel.setText("delaunay三角网生成完成")
     def step2(self):
-        self.reduce_triangulation(self.layer,0.8)
+        warningLabel=self.lblWarning
+        warningLabel.setText("正在剪枝...")
+        self.layer=self.reduce_triangulation(self.layer,0.8)
+        warningLabel.setText("剪枝完成")
+    def step3(self):
+        warningLabel=self.lblWarning
+        warningLabel.setText("正在合并...")
+        self.layer=self.merge_triangulation(self.layer)
+        warningLabel.setText("合并完成")
     def check_layer_type(self,layer,warningLabel):
 
         # 获取几何类型
@@ -261,7 +278,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
             polygon_id = feature['polygon_id']  # 获取 polygon_id 属性
             points.append(QgsPointXY(point.x(), point.y()))  # 获取点的 x, y 坐标
             point_id_map[len(points) - 1] = polygon_id  # 记录点的 ID 和 polygon_id
-
+        print("delaunay多边形建立:属性表生成完成")
         # 创建 QgsGeometry 对象
         geometry = QgsGeometry.fromPolylineXY(points)
 
@@ -272,6 +289,8 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         triangle_id = 1
         for geom in triangulation.asGeometryCollection():
             if geom.type() == QgsWkbTypes.PolygonGeometry:
+                if triangle_id%100==0:
+                    print("正在添加第"+str(triangle_id)+"个多边形")
                 # 获取三角形的三个顶点
                 vertices = geom.asPolygon()[0]
 
@@ -295,6 +314,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         # 刷新图层以显示更改
         triangulation_layer.updateExtents()
         QgsProject.instance().addMapLayer(triangulation_layer)
+        print("delaunay多边形建立:图层已更改")
         return triangulation_layer
 
     def reduce_triangulation(self,triangulation_layer,magnification):
@@ -323,10 +343,16 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
         # 创建一个新的临时图层
         crs = triangulation_layer.crs()  # 获取原图层的坐标参考系统
-        temporary_layer = QgsVectorLayer('Polygon?crs={}'.format(crs.authid()), 'Reduced Triangles', 'memory')
+        reduce_layer = QgsVectorLayer('Polygon?crs={}'.format(crs.authid()), 'Reduced Triangles', 'memory')
 
         # 获取数据提供者（用于添加和删除特征）
-        provider = temporary_layer.dataProvider()
+        provider = reduce_layer.dataProvider()
+
+        reduce_layer.startEditing()  # 开始编辑
+        for field in triangulation_layer.fields():
+            provider.addAttributes([field])  # 添加字段
+        reduce_layer.updateFields()  # 更新字段
+        reduce_layer.commitChanges()  # 提交修改
 
         # 存储边长大于平均长度三倍的三角形
         to_keep_features = []
@@ -350,7 +376,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     point_1 = feature['point_1']
                     point_2 = feature['point_2']
                     point_3 = feature['point_3']
-                    # 如果 point_1, point_2, point_3 相同，则跳过
+                    # 如果 point_1, point_2, point_3 相同
                     if point_1 == point_2 == point_3:
                         to_keep_features.append(feature)  # 将该三角形加入保留列表
 
@@ -358,8 +384,219 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         provider.addFeatures(to_keep_features)
 
         # 更新图层
-        temporary_layer.updateExtents()
+        reduce_layer.updateExtents()
 
-        QgsProject.instance().addMapLayer(temporary_layer)
+        QgsProject.instance().addMapLayer(reduce_layer)
+
+        return reduce_layer
+
+    def merge_triangulation(self,reduce_layer):
+        crs = reduce_layer.crs()  # 获取原图层的坐标参考系统
+
+        polygons=[]
+        i=0
+        # 遍历图层中的所有要素
+        for feature in reduce_layer.getFeatures():
+            i+=1
+            if i%100==0:
+                print("正在处理第"+str(i)+"个多边形")
+            # 获取每个多边形的属性值
+            point_1 = feature['point_1']
+            point_2 = feature['point_2']
+            point_3 = feature['point_3']
+            triangle_id = feature['triangle_id']
+
+            polygons.append({'point_1':point_1,'point_2':point_2,'point_3':point_3,'triangle_id':triangle_id})
+        grouped=self.geo_merge(polygons)
+
+        merged_layer = QgsVectorLayer('Polygon?crs={}'.format(crs.authid()), 'merged_layer', 'memory')
+        provider = merged_layer.dataProvider()
+
+        print("总共"+str(len(grouped))+"组")
+        j=0
+        for group in grouped.values():
+            j+=1
+            print("合并:处理第"+str(j)+"组")
+            merged_geometry = QgsGeometry.fromWkt('MULTIPOLYGON EMPTY')
+            for feature in group:
+                polygonId=feature['triangle_id']
+                # 设置你要查找的属性字段名和属性值
+                field_name = 'triangle_id'
+                value_to_find = polygonId
+
+                # 创建查询请求（筛选器）
+                request = QgsFeatureRequest().setFilterExpression(f'"{field_name}" = \'{value_to_find}\'')
+
+                # 查找符合条件的要素
+                feature =next(reduce_layer.getFeatures(request))
+
+                if feature:
+                    # 获取多边形的几何并合并到已有的几何中
+                    geometry = feature.geometry()
+                    if merged_geometry.isEmpty():
+                        merged_geometry = geometry
+                    else:
+                        merged_geometry = merged_geometry.combine(geometry)
+            # 将合并后的几何添加到新图层
+            if not merged_geometry.isEmpty():
+                new_feature = QgsFeature()
+                new_feature.setGeometry(merged_geometry)
+                provider.addFeature(new_feature)
+
+        # 更新图层
+        merged_layer.updateExtents()
+        QgsProject.instance().addMapLayer(merged_layer)
+
+        print("多边形合并:已完成")
+        # 返回合并后的图层
+        return  merged_layer
+
+        #     # 将属性值作为元组存储在列表中
+        #     found = False
+        #     hashcode = self.encode_record(point_1, point_2, point_3)
+        #
+        #     polygonMap.setdefault(hashcode, []).append(triangle_id)
+        #
+        # merged_layer = QgsVectorLayer('Polygon?crs=EPSG:4326', 'merged_layer', 'memory')
+        # provider = merged_layer.dataProvider()
+        #
+        # j=0
+        # for hashCode in polygonMap:
+        #     j+=1
+        #     print("多边形合并:正在合并第"+str(j)+"个")
+        #     merged_geometry = QgsGeometry.fromWkt('MULTIPOLYGON EMPTY')
+        #     for polygonId in polygonMap[hashCode]:
+        #         # 设置你要查找的属性字段名和属性值
+        #         field_name = 'triangle_id'
+        #         value_to_find = polygonId
+        #
+        #         # 创建查询请求（筛选器）
+        #         request = QgsFeatureRequest().setFilterExpression(f'"{field_name}" = \'{value_to_find}\'')
+        #
+        #         # 查找符合条件的要素
+        #         feature =next(reduce_layer.getFeatures(request))
+        #
+        #         if feature:
+        #             # 获取多边形的几何并合并到已有的几何中
+        #             geometry = feature.geometry()
+        #             if merged_geometry.isEmpty():
+        #                 merged_geometry = geometry
+        #             else:
+        #                 merged_geometry = merged_geometry.combine(geometry)
+        #     # 将合并后的几何添加到新图层
+        #     if not merged_geometry.isEmpty():
+        #         new_feature = QgsFeature()
+        #         new_feature.setGeometry(merged_geometry)
+        #         provider.addFeature(new_feature)
+        # # 更新图层
+        # merged_layer.updateExtents()
+        # QgsProject.instance().addMapLayer(merged_layer)
+        #
+        # print("多边形合并:已完成")
+        # # 返回合并后的图层
+        # return  merged_layer
+
+            # for category in categories:
+            #     if (point_1 in category or point_2 in category or point_3 in category):
+            #         found = True
+            #         break
+            # if not found:
+            #     categories.append({(point_1, point_2, point_3)})
+
+        # # 创建一个新的图层来存储合并后的多边形
+        # merged_layer = QgsVectorLayer('Polygon?crs=EPSG:4326', 'merged_layer', 'memory')
+        # provider = merged_layer.dataProvider()
+        #
+        # print("总共"+str(len(categories)))
+        # merge_map={}
+        # j=0
+        #
+        # # 合并同类多边形
+        # for category in categories:
+        #     j+=1
+        #     if j%100==0:
+        #         print("正在合并第"+str(i)+"个多边形")
+        #         print(category)
+        #     if merge_map!={}:
+        #         pass
+        #     else:
+        #         merge_map[]
+            # # 创建一个空的QgsGeometry来合并多边形
+            # merged_geometry = QgsGeometry()
+            #
+            # for feature in reduce_layer.getFeatures():
+            #     # 获取每个要素的几何体
+            #     point_1 = feature['point_1']
+            #     point_2 = feature['point_2']
+            #     point_3 = feature['point_3']
+            #     if (point_1, point_2, point_3) in category or \
+            #             (point_1, point_2, point_3) in category or \
+            #             (point_1, point_3, point_2) in category:
+            #         geom = feature.geometry()
+            #         if merged_geometry.isEmpty():
+            #             merged_geometry = geom
+            #         else:
+            #             merged_geometry = merged_geometry.combine(geom)
+            #
+            # # 创建一个新的要素并将合并后的几何体添加到新图层
+            # new_feature = QgsFeature()
+            # new_feature.setGeometry(merged_geometry)
+            #
+            # # 添加到新图层
+            # provider.addFeature(new_feature)
+
+        # # 更新图层
+        # merged_layer.updateExtents()
+        #
+        # QgsProject.instance().addMapLayer(merged_layer)
+
+
+    def encode_record(self,a, b, c):
+        record = f"{a}-{b}-{c}"
+        return int(hashlib.md5(record.encode()).hexdigest(), 16)  # 将MD5哈希值转换为整数
+
+    def geo_merge_find(self,parent, i):
+        if parent[i] != i:
+            parent[i] = self.geo_merge_find(parent, parent[i])  # 路径压缩
+        return parent[i]
+
+    def geo_merge_union(self,parent, rank, x, y):
+        rootX = self.geo_merge_find(parent, x)
+        rootY = self.geo_merge_find(parent, y)
+        if rootX != rootY:
+            if rank[rootX] > rank[rootY]:
+                parent[rootY] = rootX
+            elif rank[rootX] < rank[rootY]:
+                parent[rootX] = rootY
+            else:
+                parent[rootY] = rootX
+                rank[rootX] += 1
+
+    def geo_merge(self,objects):
+        # 初始化并查集
+        parent = [i for i in range(len(objects))]
+        rank = [0] * len(objects)
+
+        # 对每个属性分别排序并检查相邻对象
+        for attr in ['point_1', 'point_2', 'point_3']:
+            sorted_objects = sorted(enumerate(objects), key=lambda x: x[1][attr])
+            for i in range(1, len(sorted_objects)):
+                if sorted_objects[i][1][attr] == sorted_objects[i - 1][1][attr]:
+                    self.geo_merge_union(parent, rank, sorted_objects[i][0], sorted_objects[i - 1][0])
+
+        # 分类输出
+        grouped = {}
+        for i, obj in enumerate(objects):
+            root = self.geo_merge_find(parent, i)
+            if root not in grouped:
+                grouped[root] = []
+            grouped[root].append(obj)
+
+        return grouped
+    def onPbFillPolygonClicked(self):
+        currLayer=self.mlLayer.currentLayer()
+        crs = currLayer.crs()
+        crs_auth_id = crs.authid()
+        warningLabel=self.lblWarning
 
         return

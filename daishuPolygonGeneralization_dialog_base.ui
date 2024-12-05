@@ -78,6 +78,19 @@
     <string>step&gt;&gt;</string>
    </property>
   </widget>
+  <widget class="QPushButton" name="pbFillPolygon">
+   <property name="geometry">
+    <rect>
+     <x>280</x>
+     <y>190</y>
+     <width>81</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>fillPolygon</string>
+   </property>
+  </widget>
  </widget>
  <customwidgets>
   <customwidget>
