@@ -42,6 +42,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QVariant  # 用于属性字段的数据类型
 
+import processing
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'daishuPolygonGeneralization_dialog_base.ui'))
@@ -61,6 +62,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         self.pbGeneralize.clicked.connect(self.onPbGeneralizeClicked)
         self.pbStep.clicked.connect(self.onpbStepClicked)
         self.pbFillPolygon.clicked.connect(self.onPbFillPolygonClicked)
+        self.pbSimplify.clicked.connect(self.onPbSimplifylicked)
 
     def onPbGeneralizeClicked(self):
         currLayer=self.mlLayer.currentLayer()
@@ -83,7 +85,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     print(pic)
                     point_layer=self.generate_points(pic,currLayer,crs_auth_id)
                     triangulation_layer=self.generate_delaunay_triangulation(point_layer,crs_auth_id)
-                    reduce_layer=self.reduce_triangulation(triangulation_layer,0.8)
+                    reduce_layer=self.reduce_triangulation(triangulation_layer,0.9)
                     merged_layer=self.merge_triangulation(reduce_layer)
                     full_layer=self.fulfillPolygon(merged_layer)
                     warningLabel.setText("生成完成")
@@ -147,7 +149,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
     def step2(self):
         warningLabel=self.lblWarning
         warningLabel.setText("正在剪枝...")
-        self.layer=self.reduce_triangulation(self.layer,0.8)
+        self.layer=self.reduce_triangulation(self.layer,0.9)
         warningLabel.setText("剪枝完成")
     def step3(self):
         warningLabel=self.lblWarning
@@ -564,3 +566,115 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         currLayer=self.mlLayer.currentLayer()
         self.fulfillPolygon(currLayer)
         return
+
+    def onPbSimplifylicked(self):
+        currLayer=self.mlLayer.currentLayer()
+        return self.simpifyPolygonWithConvexHull(currLayer)
+
+    def simpifyPolygonWithConvexHull(self,full_layer):
+        convex_hull_layer=self.calculate_convex_hull(full_layer)
+        fixed_layer=self.fix_convex_hull(convex_hull_layer)
+        fixed_convex_hull_layer=self.calculate_convex_hull(fixed_layer)
+        return fixed_convex_hull_layer
+    def simplifyPolygon(self,full_layer,tolerance,type):
+        # 使用 'simplifygeometries' 算法简化多边形
+        params = {
+            'INPUT': full_layer,
+            'METHOD': type, #0:道格拉斯普客，1:基于格网，2:基于面积
+            'TOLERANCE': tolerance,
+            'OUTPUT': 'memory:'  # 结果保存在内存中
+        }
+
+        result = processing.run("native:simplifygeometries", params)
+        simplified_layer = result['OUTPUT']
+
+        # 将简化后的图层添加到QGIS中
+        QgsProject.instance().addMapLayer(simplified_layer)
+
+        return simplified_layer
+    def calculate_convex_hull(self,full_layer):
+        crs = full_layer.crs()  # 获取原图层的坐标参考系统
+        # 创建一个临时内存图层来存储凸包结果
+        convex_hull_layer = QgsVectorLayer('Polygon?crs={}'.format(crs.authid()), "Convex_Hulls", "memory")
+        provider = convex_hull_layer.dataProvider()
+
+        # 复制输入图层的字段定义到新的凸包图层
+        provider.addAttributes(full_layer.fields())
+        convex_hull_layer.updateFields()  # 更新字段
+
+        # 开始编辑会话
+        convex_hull_layer.startEditing()
+
+        for feature in full_layer.getFeatures():
+            geom = feature.geometry()
+            if geom is not None:
+                hull_geom = geom.convexHull()  # 计算凸包
+
+                # 创建新的特征，并设置几何和属性
+                new_feature = QgsFeature()
+                new_feature.setGeometry(hull_geom)
+                new_feature.setAttributes(feature.attributes())  # 保留原始属性
+
+                # 添加到图层
+                convex_hull_layer.addFeature(new_feature)
+
+        # 提交更改结束编辑会话
+        convex_hull_layer.commitChanges()
+
+        # 将新图层添加到当前项目
+        QgsProject.instance().addMapLayer(convex_hull_layer)
+        return convex_hull_layer
+
+
+    def fix_convex_hull(self, convex_hull_layer):
+        crs = convex_hull_layer.crs()  # 获取原图层的坐标参考系统
+        # 创建一个临时内存图层来存储凸包结果
+        fixed_layer = QgsVectorLayer('Polygon?crs={}'.format(crs.authid()), "Convex_Hulls", "memory")
+        provider = fixed_layer.dataProvider()
+
+        # 复制输入图层的字段定义到新的凸包图层
+        provider.addAttributes(convex_hull_layer.fields())
+        fixed_layer.updateFields()  # 更新字段
+
+        # 开始编辑会话
+        fixed_layer.startEditing()
+
+        # 初始化两个列表，用于存储独立的多边形和需要合并的多边形集合
+        independent_geoms = []
+        processed_features = set()  # 跟踪已处理的要素
+
+        # 遍历所有的多边形特征
+        for feature in convex_hull_layer.getFeatures():
+            if feature.id() in processed_features:
+                continue
+
+            geom = feature.geometry()
+            to_merge = [geom]  # 准备合并的几何体列表
+
+            # 查找所有与当前几何体相交的几何体并准备合并
+            for other_feature in convex_hull_layer.getFeatures():
+                if other_feature.id() != feature.id() and other_feature.id() not in processed_features:
+                    other_geom = other_feature.geometry()
+                    if geom.intersects(other_geom):
+                        to_merge.append(other_geom)
+                        processed_features.add(other_feature.id())  # 标记为已处理
+
+            # 合并与相交的多边形
+            merged_geom = QgsGeometry.unaryUnion(to_merge) if len(to_merge) > 1 else geom
+
+            # 添加合并后的多边形为一个要素（如果有的话）
+            if not merged_geom.isEmpty():
+                feat = QgsFeature()
+                feat.setGeometry(merged_geom)
+                provider.addFeature(feat)
+
+            # 将当前要素标记为已处理
+            processed_features.add(feature.id())
+
+        # 提交更改结束编辑会话
+        fixed_layer.commitChanges()
+
+        # 将新图层添加到当前项目
+        QgsProject.instance().addMapLayer(fixed_layer)
+
+        return fixed_layer
