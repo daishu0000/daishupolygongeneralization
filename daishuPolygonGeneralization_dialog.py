@@ -732,7 +732,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
     def update_and_process(self, warningLabel, message, process_func, *args):
         """Helper function to update the UI and then process."""
         warningLabel.setText(message)
-        QTimer.singleShot(1000, lambda: self._process_with_update(warningLabel, message,process_func, *args))
+        QTimer.singleShot(500, lambda: self._process_with_update(warningLabel, message,process_func, *args))
 
     def _process_with_update(self, warningLabel, message,process_func, *args):
         """Internal method to perform the processing after the UI has been updated."""
