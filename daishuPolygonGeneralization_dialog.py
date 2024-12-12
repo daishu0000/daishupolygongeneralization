@@ -88,6 +88,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     reduce_layer=self.reduce_triangulation(triangulation_layer,0.9)
                     merged_layer=self.merge_triangulation(reduce_layer)
                     full_layer=self.fulfillPolygon(merged_layer)
+                    fixed_convex_hull_layer=self.simpifyPolygonWithConvexHull(full_layer)
                     warningLabel.setText("生成完成")
                 else:
                     print("当前图层不是面图层！")
@@ -113,6 +114,9 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         elif self.step == 4:
             self.step4()
             self.step = 5
+        elif self.step == 5:
+            self.step5()
+            self.step = 6
         return
 
     def step0(self):
@@ -161,6 +165,12 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         warningLabel.setText("正在填充多边形...")
         self.layer=self.fulfillPolygon(self.layer)
         warningLabel.setText("填充多边形完成")
+
+    def step4(self):
+        warningLabel=self.lblWarning
+        warningLabel.setText("正在简化多边形...")
+        self.layer=self.simpifyPolygonWithConvexHull(self.layer)
+        warningLabel.setText("简化多边形完成")
 
     def check_layer_type(self,layer,warningLabel):
 
