@@ -40,6 +40,7 @@ from qgis.core import (
     QgsFeatureRequest
 
 )
+from PyQt5.QtCore import QTimer
 from qgis.PyQt.QtCore import QVariant  # 用于属性字段的数据类型
 
 import processing
@@ -61,8 +62,13 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
         self.pbGeneralize.clicked.connect(self.onPbGeneralizeClicked)
         self.pbStep.clicked.connect(self.onpbStepClicked)
+
+        self.pbPoint.clicked.connect(self.onPbPointClicked)
+        self.pbDelaunay.clicked.connect(self.onPbDelaunayClicked)
+        self.pbReduction.clicked.connect(self.onPbReductionClicked)
+        self.pbMerge.clicked.connect(self.onPbMergeClicked)
         self.pbFillPolygon.clicked.connect(self.onPbFillPolygonClicked)
-        self.pbSimplify.clicked.connect(self.onPbSimplifylicked)
+        self.pbSimplify.clicked.connect(self.onPbSimplifyClicked)
 
     def onPbGeneralizeClicked(self):
         currLayer=self.mlLayer.currentLayer()
@@ -125,6 +131,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         crs_auth_id = crs.authid()  # 获取参考系的 EPSG 代码，例如 "EPSG:4326"
 
         warningLabel=self.lblWarning
+        warningLabel.setText("1.正在生成点")
         if self.check_layer_type(currLayer,warningLabel)==1:
             if currLayer is not None and currLayer.isValid():
                 # 确保图层是矢量图层
@@ -139,7 +146,8 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     self.pic=pic
                     self.crs=crs_auth_id
                     self.layer=self.generate_points(pic,currLayer,crs_auth_id)
-                    warningLabel.setText("点生成完成")
+                    warningLabel.setText("1.点生成完成")
+                    return self.layer
                 else:
                     print("当前图层不是面图层！")
             else:
@@ -147,30 +155,30 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def step1(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("正在生成delaunay三角网...")
+        warningLabel.setText("2.正在生成delaunay三角网...")
         self.layer = self.generate_delaunay_triangulation(self.layer, self.crs)
-        warningLabel.setText("delaunay三角网生成完成")
+        warningLabel.setText("2.delaunay三角网生成完成")
     def step2(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("正在剪枝...")
+        warningLabel.setText("3.正在剪枝...")
         self.layer=self.reduce_triangulation(self.layer,0.9)
-        warningLabel.setText("剪枝完成")
+        warningLabel.setText("3.剪枝完成")
     def step3(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("正在合并...")
+        warningLabel.setText("4.正在合并...")
         self.layer=self.merge_triangulation(self.layer)
-        warningLabel.setText("合并完成")
+        warningLabel.setText("4.合并完成")
     def step4(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("正在填充多边形...")
+        warningLabel.setText("5.正在填充多边形...")
         self.layer=self.fulfillPolygon(self.layer)
-        warningLabel.setText("填充多边形完成")
+        warningLabel.setText("5.填充多边形完成")
 
-    def step4(self):
+    def step5(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("正在简化多边形...")
+        warningLabel.setText("6.正在简化多边形...")
         self.layer=self.simpifyPolygonWithConvexHull(self.layer)
-        warningLabel.setText("简化多边形完成")
+        warningLabel.setText("6.简化多边形完成")
 
     def check_layer_type(self,layer,warningLabel):
 
@@ -470,7 +478,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
         print("多边形合并:已完成")
         # 返回合并后的图层
-        return  merged_layer
+        return merged_layer
 
 
     def encode_record(self,a, b, c):
@@ -572,14 +580,6 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                 print("图层无效！")
 
         return
-    def onPbFillPolygonClicked(self):
-        currLayer=self.mlLayer.currentLayer()
-        self.fulfillPolygon(currLayer)
-        return
-
-    def onPbSimplifylicked(self):
-        currLayer=self.mlLayer.currentLayer()
-        return self.simpifyPolygonWithConvexHull(currLayer)
 
     def simpifyPolygonWithConvexHull(self,full_layer):
         convex_hull_layer=self.calculate_convex_hull(full_layer)
@@ -688,3 +688,92 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         QgsProject.instance().addMapLayer(fixed_layer)
 
         return fixed_layer
+
+    def onPbPointClicked(self):
+        self.mlLayer.setLayer(self.step0())
+        return
+    # def onPbDelaunayClicked(self):
+    #     warningLabel=self.lblWarning
+    #     warningLabel.setText("2.正在生成delaunay三角网...")
+    #     currLayer=self.mlLayer.currentLayer()
+    #     crs = currLayer.crs().authid()
+    #     self.mlLayer.setLayer(self.generate_delaunay_triangulation(currLayer,crs))
+    #     warningLabel.setText("2.delaunay三角网生成完成")
+    #     return
+    # def onPbReductionClicked(self):
+    #     warningLabel=self.lblWarning
+    #     warningLabel.setText("3.正在剪枝...")
+    #     currLayer=self.mlLayer.currentLayer()
+    #     self.mlLayer.setLayer(self.reduce_triangulation(currLayer,0.9))
+    #     warningLabel.setText("3.剪枝完成")
+    #     return
+    # def onPbMergeClicked(self):
+    #     warningLabel=self.lblWarning
+    #     warningLabel.setText("4.正在合并...")
+    #     currLayer=self.mlLayer.currentLayer()
+    #     self.mlLayer.setLayer(self.merge_triangulation(currLayer))
+    #     warningLabel.setText("4.合并完成")
+    #     return
+    # def onPbFillPolygonClicked(self):
+    #     warningLabel=self.lblWarning
+    #     warningLabel.setText("5.正在填充多边形...")
+    #     currLayer=self.mlLayer.currentLayer()
+    #     self.mlLayer.setLayer(self.fulfillPolygon(currLayer))
+    #     warningLabel.setText("5.填充多边形完成")
+    #     return
+    # def onPbSimplifyClicked(self):
+    #     warningLabel=self.lblWarning
+    #     warningLabel.setText("6.正在简化多边形...")
+    #     currLayer=self.mlLayer.currentLayer()
+    #     self.mlLayer.setLayer(self.simpifyPolygonWithConvexHull(currLayer))
+    #     warningLabel.setText("6.简化多边形完成")
+    #     return
+
+    def update_and_process(self, warningLabel, message, process_func, *args):
+        """Helper function to update the UI and then process."""
+        warningLabel.setText(message)
+        QTimer.singleShot(1000, lambda: self._process_with_update(warningLabel, message,process_func, *args))
+
+    def _process_with_update(self, warningLabel, message,process_func, *args):
+        """Internal method to perform the processing after the UI has been updated."""
+        currLayer = self.mlLayer.currentLayer()
+        new_layer = process_func(currLayer, *args)
+        self.mlLayer.setLayer(new_layer)
+        warningLabel.setText(f"{message.split('.')[0]}.{message.split('.')[1].split('在')[1]}完成")
+
+    def onPbDelaunayClicked(self):
+        self.update_and_process(
+            self.lblWarning,
+            "2.正在生成delaunay三角网...",
+            self.generate_delaunay_triangulation,
+            self.mlLayer.currentLayer().crs().authid()
+        )
+
+    def onPbReductionClicked(self):
+        self.update_and_process(
+            self.lblWarning,
+            "3.正在剪枝...",
+            self.reduce_triangulation,
+            0.9
+        )
+
+    def onPbMergeClicked(self):
+        self.update_and_process(
+            self.lblWarning,
+            "4.正在合并...",
+            self.merge_triangulation
+        )
+
+    def onPbFillPolygonClicked(self):
+        self.update_and_process(
+            self.lblWarning,
+            "5.正在填充多边形...",
+            self.fulfillPolygon
+        )
+
+    def onPbSimplifyClicked(self):
+        self.update_and_process(
+            self.lblWarning,
+            "6.正在简化多边形...",
+            self.simpifyPolygonWithConvexHull
+        )
