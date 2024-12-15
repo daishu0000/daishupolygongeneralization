@@ -32,7 +32,7 @@
   <widget class="QgsMapLayerComboBox" name="mlLayer">
    <property name="geometry">
     <rect>
-     <x>120</x>
+     <x>130</x>
      <y>30</y>
      <width>160</width>
      <height>27</height>
@@ -157,6 +157,38 @@
    </property>
    <property name="text">
     <string>4.Merge</string>
+   </property>
+  </widget>
+  <widget class="QDoubleSpinBox" name="spThreshold">
+   <property name="geometry">
+    <rect>
+     <x>90</x>
+     <y>280</y>
+     <width>62</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <property name="value">
+    <double>0.900000000000000</double>
+   </property>
+  </widget>
+  <widget class="QLabel" name="lblThreshold">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>280</y>
+     <width>61</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <family>Arial</family>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="text">
+    <string>Threshold</string>
    </property>
   </widget>
  </widget>
