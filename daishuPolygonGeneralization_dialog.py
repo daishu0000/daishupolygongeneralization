@@ -91,7 +91,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     print(pic)
                     point_layer=self.generate_points(pic,currLayer,crs_auth_id)
                     triangulation_layer=self.generate_delaunay_triangulation(point_layer,crs_auth_id)
-                    reduce_layer=self.reduce_triangulation(triangulation_layer,0.9)
+                    reduce_layer=self.reduce_triangulation(triangulation_layer,self.spThreshold.value())
                     merged_layer=self.merge_triangulation(reduce_layer)
                     full_layer=self.fulfillPolygon(merged_layer)
                     fixed_convex_hull_layer=self.simpifyPolygonWithConvexHull(full_layer)
@@ -161,7 +161,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
     def step2(self):
         warningLabel=self.lblWarning
         warningLabel.setText("3.正在剪枝...")
-        self.layer=self.reduce_triangulation(self.layer,0.9)
+        self.layer=self.reduce_triangulation(self.layer,self.spThreshold.value())
         warningLabel.setText("3.剪枝完成")
     def step3(self):
         warningLabel=self.lblWarning
@@ -692,42 +692,6 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
     def onPbPointClicked(self):
         self.mlLayer.setLayer(self.step0())
         return
-    # def onPbDelaunayClicked(self):
-    #     warningLabel=self.lblWarning
-    #     warningLabel.setText("2.正在生成delaunay三角网...")
-    #     currLayer=self.mlLayer.currentLayer()
-    #     crs = currLayer.crs().authid()
-    #     self.mlLayer.setLayer(self.generate_delaunay_triangulation(currLayer,crs))
-    #     warningLabel.setText("2.delaunay三角网生成完成")
-    #     return
-    # def onPbReductionClicked(self):
-    #     warningLabel=self.lblWarning
-    #     warningLabel.setText("3.正在剪枝...")
-    #     currLayer=self.mlLayer.currentLayer()
-    #     self.mlLayer.setLayer(self.reduce_triangulation(currLayer,0.9))
-    #     warningLabel.setText("3.剪枝完成")
-    #     return
-    # def onPbMergeClicked(self):
-    #     warningLabel=self.lblWarning
-    #     warningLabel.setText("4.正在合并...")
-    #     currLayer=self.mlLayer.currentLayer()
-    #     self.mlLayer.setLayer(self.merge_triangulation(currLayer))
-    #     warningLabel.setText("4.合并完成")
-    #     return
-    # def onPbFillPolygonClicked(self):
-    #     warningLabel=self.lblWarning
-    #     warningLabel.setText("5.正在填充多边形...")
-    #     currLayer=self.mlLayer.currentLayer()
-    #     self.mlLayer.setLayer(self.fulfillPolygon(currLayer))
-    #     warningLabel.setText("5.填充多边形完成")
-    #     return
-    # def onPbSimplifyClicked(self):
-    #     warningLabel=self.lblWarning
-    #     warningLabel.setText("6.正在简化多边形...")
-    #     currLayer=self.mlLayer.currentLayer()
-    #     self.mlLayer.setLayer(self.simpifyPolygonWithConvexHull(currLayer))
-    #     warningLabel.setText("6.简化多边形完成")
-    #     return
 
     def update_and_process(self, warningLabel, message, process_func, *args):
         """Helper function to update the UI and then process."""
@@ -754,7 +718,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
             self.lblWarning,
             "3.正在剪枝...",
             self.reduce_triangulation,
-            0.9
+            self.spThreshold.value()
         )
 
     def onPbMergeClicked(self):
