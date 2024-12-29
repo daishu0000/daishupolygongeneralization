@@ -10,7 +10,8 @@ version=0.1
 author=daishu
 email=daishu10000@gmail.com
 
-about=Provide a brief description of the plugin and its purpose.
+about=The project is the course project of "Map Generalization and Scale Transformation" in WHU.if there is any problem, contact me at the issue of the project or daishu10000@gmail.com .Quick start: you can choose a polygon layer (for example "building.shp" in test/data folder) and click the "Generalize" button to generalize.
+
 
 tracker=http://bugs
 repository=http://repo
