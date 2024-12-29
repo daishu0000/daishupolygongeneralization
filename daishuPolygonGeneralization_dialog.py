@@ -87,7 +87,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     width=bounds.width()
                     height=bounds.height()
 
-                    pic=min(width,height)*self.spPicSize.value()
+                    pic=min(width,height)*self.spPicInterval.value()
 
                     print(pic)
 
@@ -161,7 +161,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     width=bounds.width()
                     height=bounds.height()
 
-                    pic=min(width,height)*self.spPicSize.value()
+                    pic=min(width,height)*self.spPicInterval.value()
                     self.pic=pic
                     self.crs=crs_auth_id
                     self.layer=self.generate_points(pic,currLayer,crs_auth_id)
