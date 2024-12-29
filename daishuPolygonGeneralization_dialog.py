@@ -91,27 +91,27 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
                     print(pic)
 
-                    warningLabel.setText("1.正在生成点")
+                    warningLabel.setText("1.generate point...")
                     QApplication.processEvents()  # 刷新界面
                     point_layer=self.generate_points(pic,currLayer,crs_auth_id)
 
-                    warningLabel.setText("2.正在生成delaunay三角网...")
+                    warningLabel.setText("2.generate delaunay...")
                     QApplication.processEvents()  # 刷新界面
                     triangulation_layer=self.generate_delaunay_triangulation(point_layer,crs_auth_id)
 
-                    warningLabel.setText("3.正在剪枝...")
+                    warningLabel.setText("3.pruning...")
                     QApplication.processEvents()
                     reduce_layer=self.reduce_triangulation(triangulation_layer,self.spThreshold.value())
 
-                    warningLabel.setText("4.正在合并...")
+                    warningLabel.setText("4.merge...")
                     QApplication.processEvents()
                     merged_layer=self.merge_triangulation(reduce_layer)
 
-                    warningLabel.setText("5.正在填充多边形...")
+                    warningLabel.setText("5.fulfill...")
                     QApplication.processEvents()
                     full_layer=self.fulfillPolygon(merged_layer)
 
-                    warningLabel.setText("6.正在简化多边形...")
+                    warningLabel.setText("6.simplify...")
                     QApplication.processEvents()
                     fixed_convex_hull_layer=self.simpifyPolygonWithConvexHull(full_layer)
                     warningLabel.setText("生成完成")
@@ -150,7 +150,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         crs_auth_id = crs.authid()  # 获取参考系的 EPSG 代码，例如 "EPSG:4326"
 
         warningLabel=self.lblWarning
-        warningLabel.setText("1.正在生成点")
+        warningLabel.setText("1.generate point...")
         if self.check_layer_type(currLayer,warningLabel)==1:
             if currLayer is not None and currLayer.isValid():
                 # 确保图层是矢量图层
@@ -165,7 +165,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     self.pic=pic
                     self.crs=crs_auth_id
                     self.layer=self.generate_points(pic,currLayer,crs_auth_id)
-                    warningLabel.setText("1.点生成完成")
+                    warningLabel.setText("1.complete!")
                     return self.layer
                 else:
                     print("当前图层不是面图层！")
@@ -174,30 +174,30 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def step1(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("2.正在生成delaunay三角网...")
+        warningLabel.setText("2.generate delaunay...")
         self.layer = self.generate_delaunay_triangulation(self.layer, self.crs)
-        warningLabel.setText("2.delaunay三角网生成完成")
+        warningLabel.setText("2.complete!")
     def step2(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("3.正在剪枝...")
+        warningLabel.setText("3.pruning...")
         self.layer=self.reduce_triangulation(self.layer,self.spThreshold.value())
-        warningLabel.setText("3.剪枝完成")
+        warningLabel.setText("3.complete!")
     def step3(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("4.正在合并...")
+        warningLabel.setText("4.merge...")
         self.layer=self.merge_triangulation(self.layer)
-        warningLabel.setText("4.合并完成")
+        warningLabel.setText("4.complete!")
     def step4(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("5.正在填充多边形...")
+        warningLabel.setText("5.fulfill...")
         self.layer=self.fulfillPolygon(self.layer)
-        warningLabel.setText("5.填充多边形完成")
+        warningLabel.setText("5.complete!")
 
     def step5(self):
         warningLabel=self.lblWarning
-        warningLabel.setText("6.正在简化多边形...")
+        warningLabel.setText("6.simplify...")
         self.layer=self.simpifyPolygonWithConvexHull(self.layer)
-        warningLabel.setText("6.简化多边形完成")
+        warningLabel.setText("6.complete!")
 
     def check_layer_type(self,layer,warningLabel):
 
@@ -208,10 +208,10 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         # 根据几何类型输出图层类型
         if geometry_type == QgsWkbTypes.PointGeometry:
             print("这是一个点图层")
-            warningLabel.setText("不能是点图层")
+            warningLabel.setText("cannot be a point layer!")
         elif geometry_type == QgsWkbTypes.LineGeometry:
             print("这是一个线图层")
-            warningLabel.setText("不能是线图层")
+            warningLabel.setText("cannot be a lineString layer!")
         elif geometry_type == QgsWkbTypes.PolygonGeometry:
             return 1
         else:
@@ -344,7 +344,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
             if geom.type() == QgsWkbTypes.PolygonGeometry:
                 if triangle_id%100==0:
                     print("正在添加第"+str(triangle_id)+"个三角形")
-                    warningLabel.setText("2、正在添加三角形(" + str(triangle_id) + "/" + str(total_triangles) + ")")
+                    warningLabel.setText("2.add delaunay(" + str(triangle_id) + "/" + str(total_triangles) + ")")
                     QApplication.processEvents()  # 刷新界面
 
                 # 获取三角形的三个顶点
@@ -475,7 +475,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         j=0
         for group in grouped.values():
             j+=1
-            warningLabel.setText("正在合并("+str(j)+"/"+str(group_num)+")")
+            warningLabel.setText("merge("+str(j)+"/"+str(group_num)+")")
             QApplication.processEvents()  # 刷新界面
             print("合并:处理第"+str(j)+"组")
             merged_geometry = QgsGeometry.fromWkt('MULTIPOLYGON EMPTY')
@@ -735,12 +735,12 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         currLayer = self.mlLayer.currentLayer()
         new_layer = process_func(currLayer, *args)
         self.mlLayer.setLayer(new_layer)
-        warningLabel.setText(f"{message.split('.')[0]}.{message.split('.')[1].split('在')[1]}完成")
+        warningLabel.setText(f"{message.split('.')[0]}.complete!")
 
     def onPbDelaunayClicked(self):
         self.update_and_process(
             self.lblWarning,
-            "2.正在生成delaunay三角网...",
+            "2.generate delaunay...",
             self.generate_delaunay_triangulation,
             self.mlLayer.currentLayer().crs().authid()
         )
@@ -748,7 +748,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
     def onPbReductionClicked(self):
         self.update_and_process(
             self.lblWarning,
-            "3.正在剪枝...",
+            "3.pruning...",
             self.reduce_triangulation,
             self.spThreshold.value()
         )
@@ -756,20 +756,20 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
     def onPbMergeClicked(self):
         self.update_and_process(
             self.lblWarning,
-            "4.正在合并...",
+            "4.merge...",
             self.merge_triangulation
         )
 
     def onPbFillPolygonClicked(self):
         self.update_and_process(
             self.lblWarning,
-            "5.正在填充多边形...",
+            "5.fulfill...",
             self.fulfillPolygon
         )
 
     def onPbSimplifyClicked(self):
         self.update_and_process(
             self.lblWarning,
-            "6.正在简化多边形...",
+            "6.simplify...",
             self.simpifyPolygonWithConvexHull
         )
