@@ -42,6 +42,7 @@ from qgis.core import (
 )
 from PyQt5.QtCore import QTimer
 from qgis.PyQt.QtCore import QVariant  # 用于属性字段的数据类型
+from PyQt5.QtWidgets import QApplication
 
 import processing
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
@@ -86,14 +87,32 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     width=bounds.width()
                     height=bounds.height()
 
-                    pic=min(width,height)/200
+                    pic=min(width,height)*self.spPicSize.value()
 
                     print(pic)
+
+                    warningLabel.setText("1.正在生成点")
+                    QApplication.processEvents()  # 刷新界面
                     point_layer=self.generate_points(pic,currLayer,crs_auth_id)
+
+                    warningLabel.setText("2.正在生成delaunay三角网...")
+                    QApplication.processEvents()  # 刷新界面
                     triangulation_layer=self.generate_delaunay_triangulation(point_layer,crs_auth_id)
+
+                    warningLabel.setText("3.正在剪枝...")
+                    QApplication.processEvents()
                     reduce_layer=self.reduce_triangulation(triangulation_layer,self.spThreshold.value())
+
+                    warningLabel.setText("4.正在合并...")
+                    QApplication.processEvents()
                     merged_layer=self.merge_triangulation(reduce_layer)
+
+                    warningLabel.setText("5.正在填充多边形...")
+                    QApplication.processEvents()
                     full_layer=self.fulfillPolygon(merged_layer)
+
+                    warningLabel.setText("6.正在简化多边形...")
+                    QApplication.processEvents()
                     fixed_convex_hull_layer=self.simpifyPolygonWithConvexHull(full_layer)
                     warningLabel.setText("生成完成")
                 else:
@@ -142,7 +161,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
                     width=bounds.width()
                     height=bounds.height()
 
-                    pic=min(width,height)/100
+                    pic=min(width,height)*self.spPicSize.value()
                     self.pic=pic
                     self.crs=crs_auth_id
                     self.layer=self.generate_points(pic,currLayer,crs_auth_id)
@@ -286,6 +305,8 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         return point_layer
 
     def generate_delaunay_triangulation(self, point_layer, crs):
+        warningLabel=self.lblWarning
+
         # 创建一个临时图层来保存 Delaunay 三角网
         triangulation_layer = QgsVectorLayer("Polygon?crs=" + crs, "Delaunay Triangulation", "memory")
         triangulation_provider = triangulation_layer.dataProvider()
@@ -314,12 +335,18 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         # 生成 Delaunay 三角剖分
         triangulation = QgsGeometry.delaunayTriangulation(geometry)
 
+        # 获取总共的三角形数量
+        total_triangles = len(triangulation.asGeometryCollection())
+
         # 遍历 GeometryCollection 中的每个三角形并将其添加到图层
         triangle_id = 1
         for geom in triangulation.asGeometryCollection():
             if geom.type() == QgsWkbTypes.PolygonGeometry:
                 if triangle_id%100==0:
-                    print("正在添加第"+str(triangle_id)+"个多边形")
+                    print("正在添加第"+str(triangle_id)+"个三角形")
+                    warningLabel.setText("2、正在添加三角形(" + str(triangle_id) + "/" + str(total_triangles) + ")")
+                    QApplication.processEvents()  # 刷新界面
+
                 # 获取三角形的三个顶点
                 vertices = geom.asPolygon()[0]
 
@@ -421,6 +448,7 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def merge_triangulation(self,reduce_layer):
         crs = reduce_layer.crs()  # 获取原图层的坐标参考系统
+        warningLabel=self.lblWarning
 
         polygons=[]
         i=0
@@ -441,10 +469,14 @@ class DaishuPolygonGeneralizationDialog(QtWidgets.QDialog, FORM_CLASS):
         merged_layer = QgsVectorLayer('Polygon?crs={}'.format(crs.authid()), 'merged_layer', 'memory')
         provider = merged_layer.dataProvider()
 
-        print("总共"+str(len(grouped))+"组")
+        group_num=len(grouped)
+
+        print("总共"+str(group_num)+"组")
         j=0
         for group in grouped.values():
             j+=1
+            warningLabel.setText("正在合并("+str(j)+"/"+str(group_num)+")")
+            QApplication.processEvents()  # 刷新界面
             print("合并:处理第"+str(j)+"组")
             merged_geometry = QgsGeometry.fromWkt('MULTIPOLYGON EMPTY')
             for feature in group:
