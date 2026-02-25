@@ -22,7 +22,7 @@ Generalize: execute all steps; Step: execute one step; 1-6: execute a certain st
 
 如果你想把插件下载到qgis，你可以压缩整个文件夹然后使用qgis的 "从ZIP文件安装" 功能
 
-这个项目是武汉大学地图综合与尺度变换的可成项目
+这个项目是武汉大学地图综合与尺度变换的课程项目
 
 如果有任何问题，通过daishu10000@gmail.com联系我
 
